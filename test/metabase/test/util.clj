@@ -599,7 +599,7 @@
            .getZone
            .getID)))))
 
-(defmulti ^:private do-model-cleanup! class)
+(defmulti ^:private ^:deprecated do-model-cleanup! class)
 
 (defmethod do-model-cleanup! :default
   [model]
@@ -610,7 +610,7 @@
   ;; don't delete Personal Collections <3
   (db/delete! Collection :personal_owner_id nil))
 
-(defn do-with-model-cleanup [model-seq f]
+(defn ^:deprecated do-with-model-cleanup [model-seq f]
   (try
     (testing (str "\n" (pr-str (cons 'with-model-cleanup (map name model-seq))) "\n")
       (f))
@@ -618,10 +618,14 @@
       (doseq [model model-seq]
         (do-model-cleanup! (db/resolve-model model))))))
 
-(defmacro with-model-cleanup
+(defmacro ^:deprecated with-model-cleanup
   "This will delete all rows found for each model in `model-seq`. By default, this calls `delete!`, so if the model has
   defined any `pre-delete` behavior, that will be preserved. Alternatively, you can define a custom implementation by
-  using the `do-model-cleanup!` multimethod above."
+  using the `do-model-cleanup!` multimethod above.
+
+  DEPRECATED -- don't use this going forward because it deletes *everything* in the app DB of this Model, not just
+  stuff created for the test. Use `with-temp` wherever possible, or manually delete things inside of `try-finally`
+  blocks."
   [model-seq & body]
   `(do-with-model-cleanup ~model-seq (fn [] ~@body)))
 
