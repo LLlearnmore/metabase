@@ -679,6 +679,25 @@
                             (throw (RuntimeException. ~(format "%s should not be called!" fn-symb))))]
      ~@body))
 
+(defn do-with-discarded-collections-perms-changes [collection-or-id f]
+  (initialize/initialize-if-needed! :db)
+  (let [read-path                   (perms/collection-read-path collection-or-id)
+        readwrite-path              (perms/collection-readwrite-path collection-or-id)
+        groups-with-read-perms      (db/select-field :group_id Permissions :object read-path)
+        groups-with-readwrite-perms (db/select-field :group_id Permissions :object readwrite-path)]
+    (try
+      (f)
+      (finally
+        (db/delete! Permissions :object [:in #{read-path readwrite-path}])
+        (doseq [group-id groups-with-read-perms]
+          (perms/grant-collection-read-permissions! group-id collection-or-id))
+        (doseq [group-id groups-with-readwrite-perms]
+          (perms/grant-collection-readwrite-permissions! group-id collection-or-id))))))
+
+(defmacro with-discarded-collections-perms-changes
+  "Execute `body`; then, in a `finally` block, restore permissions to `collection-or-id` to what they were originally."
+  [collection-or-id & body]
+  `(do-with-discarded-collections-perms-changes ~collection-or-id (fn [] ~@body)))
 
 (defn do-with-non-admin-groups-no-root-collection-perms [f]
   (initialize/initialize-if-needed! :db)
@@ -700,6 +719,13 @@
   [& body]
   `(do-with-non-admin-groups-no-root-collection-perms (fn [] ~@body)))
 
+(defmacro with-non-admin-groups-no-root-collection-for-namespace-perms
+  "Like `with-non-admin-groups-no-root-collection-perms`, but for the Root Collection of a non-default namespace."
+  [collection-namespace & body]
+  `(do-with-non-admin-groups-no-collection-perms
+    (assoc collection/root-collection
+           :namespace (name ~collection-namespace))
+    (fn [] ~@body) ))
 
 (defn doall-recursive
   "Like `doall`, but recursively calls doall on map values and nested sequences, giving you a fully non-lazy object.
